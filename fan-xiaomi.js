@@ -37,7 +37,7 @@ class FanXiaomi extends HTMLElement {
     }
     
     static getStubConfig() {
-        return { entity: "fan.fan", name: "Xiaomi Fan", platform: "xiaomi_miio_airpurifier", disable_animation: false }
+        return { entity: "fan.fan", name: "Xiaomi Fan", platform: "xiaomi_miot", disable_animation: false }
     }
     
     supportedAttributes = {
@@ -51,7 +51,7 @@ class FanXiaomi extends HTMLElement {
         const myname = this.config.name;
         const state = hass.states[entityId];
         const ui = this.getUI();
-        const platform = this.config.platform || 'xiaomi_miio_fan';
+        const platform = this.config.platform || 'xiaomi_miot';
         const use_standard_speeds = this.config.use_standard_speeds || false;
         const force_sleep_mode_support = this.config.force_sleep_mode_support || false;
         
@@ -94,6 +94,8 @@ class FanXiaomi extends HTMLElement {
         if (['dmaker.fan.p9'].includes(attrs['model'])){
             this.supportedAttributes.natural_speed_reporting = false;
             this.supportedAttributes.supported_angles = [30, 60, 90, 120, 150];
+            this.supportedAttributes.sleep_mode = true;
+
         }
         if (['leshow.fan.ss4'].includes(attrs['model'])){
             this.supportedAttributes.angle = false;
@@ -179,14 +181,15 @@ class FanXiaomi extends HTMLElement {
                         newSpeed = newSpeedLevel
                     } else {
                         newSpeedLevel = (speedLevel < this.supportedAttributes.speedLevels ? speedLevel+1: 1)
-                        newSpeed = `Level ${newSpeedLevel}`
+                        newSpeed = `Level${newSpeedLevel}`
                     }
                     
 
                     this.log(`Set speed to: ${newSpeed}`)
-                    hass.callService('fan', 'set_speed', {
+                    hass.callService(platform, 'set_property', {
                         entity_id: entityId,
-                        speed: newSpeed
+                        field: 'fan.fan_level',
+                        value: newSpeedLevel
                     });
                 }
             }
@@ -209,9 +212,10 @@ class FanXiaomi extends HTMLElement {
                         b.classList.add('loading')
 
                         this.log(`Set angle to: ${newAngle}`)
-                        hass.callService(platform, 'fan_set_oscillation_angle', {
+                        hass.callService(platform, 'set_property', {
                             entity_id: entityId,
-                            angle: newAngle
+                            field: 'fan.horizontal_angle',
+                            value: newAngle
                         });
                     }
                 }
@@ -262,9 +266,10 @@ class FanXiaomi extends HTMLElement {
                         b.classList.add('loading')
 
                         this.log(`Set timer to: ${newTimer}`)
-                        hass.callService(platform, 'fan_set_delay_off', {
+                        hass.callService(platform, 'set_property', {
                             entity_id: entityId,
-                            delay_off_countdown: newTimer
+                            field: 'fan.off_delay_time',
+                            value: newTimer
                         });
                     }
                 }
@@ -281,11 +286,17 @@ class FanXiaomi extends HTMLElement {
                         let oldChildLockState = u.innerHTML
                         if (oldChildLockState === 'On') {
                             this.log(`Set child lock to: Off`)
-                            hass.callService(platform, 'fan_set_child_lock_off')
-                        } else if (oldChildLockState === 'Off') {
+                            hass.callService(platform, 'set_property', {
+                            entity_id: entityId,
+                            field: 'physical_controls_locked',
+                            value: false  
+                        })} else if (oldChildLockState === 'Off') {
                             this.log(`Set child lock to: On`)
-                            hass.callService(platform, 'fan_set_child_lock_on')
-                        } else {
+                            hass.callService(platform, 'set_property', {
+                            entity_id: entityId,
+                            field: 'physical_controls_locked',
+                            value: true  
+                        })} else {
                             this.error(`Error setting child lock. oldChildLockState = ${oldChildLockState}`)
                             this.error(`Defaulting to Off`)
                             hass.callService(platform, 'fan_set_child_lock_off')
@@ -303,13 +314,17 @@ class FanXiaomi extends HTMLElement {
                     let u = ui.querySelector('.var-natural')
                     if (u.classList.contains('active') === false) {
                         this.log(`Set natural mode to: On`)
-                        hass.callService(platform, 'fan_set_natural_mode_on', {
-                            entity_id: entityId
+                        hass.callService(platform, 'set_property', {
+                            entity_id: entityId,
+                            field: 'fan.mode',
+                            value: 1
                         });
                     } else {
                         this.log(`Set natural mode to: Off`)
-                        hass.callService(platform, 'fan_set_natural_mode_off', {
-                            entity_id: entityId
+                        hass.callService(platform, 'set_property', {
+                            entity_id: entityId,
+                            field: 'fan.mode',
+                            value: 0
                         });
                     }
                 }
@@ -322,15 +337,17 @@ class FanXiaomi extends HTMLElement {
                     let u = ui.querySelector('.var-sleep')
                     if (u.classList.contains('active') === false) {
                         this.log(`Set sleep mode to: On`)
-                        hass.callService('fan', 'set_percentage', {
+                        hass.callService(platform, 'set_property', {
                             entity_id: entityId,
-                            percentage: 1
+                            field: 'fan.mode',
+                            value: 2
                         });
                     } else {
                         this.log(`Set sleep mode to: Off`)
-                        hass.callService('fan', 'set_speed', {
+                        hass.callService(platform, 'set_property', {
                             entity_id: entityId,
-                            speed: 'low'
+                            field: 'fan.mode',
+                            value: 0
                         });
                     }
                 }
@@ -402,17 +419,22 @@ class FanXiaomi extends HTMLElement {
         // Set and update UI parameters
         this.setUI(this.card.querySelector('.fan-xiaomi-panel'), {
             title: myname || attrs['friendly_name'],
-            natural_speed: attrs['natural_speed'],
+        //  natural_speed: attrs['natural_speed'],
+            natural_speed: attrs['preset_mode'],
             direct_speed: attrs['direct_speed'],
             raw_speed: attrs['raw_speed'],
             state: state.state,
-            child_lock: attrs['child_lock'],
+        //  child_lock: attrs['child_lock'],
+            child_lock: attrs['physical_controls_locked'],
             oscillating: attrs['oscillating'],
             led_brightness: attrs['led_brightness'],
-            delay_off_countdown: attrs['delay_off_countdown'],
-            angle: attrs['angle'],
+        //  delay_off_countdown: attrs['delay_off_countdown'],
+            delay_off_countdown: attrs['fan.off_delay_time'],
+        //  angle: attrs['angle'],
+            angle: attrs['fan.horizontal_angle'],
             speed: attrs['speed'],
-            mode: attrs['mode'],
+        //  mode: attrs['mode'],
+            mode: attrs['fan.mode'],
             model: attrs['model'],
             led: attrs['led']
         })
@@ -496,7 +518,6 @@ p{margin:0;padding:0}
 .chevron span ha-icon{width:30px;height:100%}
 .chevron span ha-icon{width:30px;height:100%;display:flex;align-items:center;justify-content:center}
 .button-angle,.button-childlock,.button-timer {cursor:pointer}
-
 @keyframes blades{0%{transform:translate(0,0) rotate(0)}
 to{transform:translate(0,0) rotate(3600deg)}
 }
@@ -507,8 +528,6 @@ to{transform:translate(0,0) rotate(3600deg)}
 80%{transform:perspective(10em) rotateY(0)}
 to{transform:perspective(10em) rotateY(40deg)}
 }
-
-
 </style>
 <div class="title">
 <p class="var-title">Playground</p>
@@ -714,7 +733,7 @@ LED
         let speedLevel
         let raw_speed_int = Number(raw_speed)
         if (!this.config.use_standard_speeds) {
-            let speedRegexp = /Level (\d)/g
+            let speedRegexp = /Level(\d)/g
             speedRegexpMatch = speedRegexp.exec(speed)
             if (speedRegexpMatch && speedRegexpMatch.length > 0) {
                 speedLevel = speedRegexpMatch[1]
@@ -735,9 +754,11 @@ LED
         
          //p* fans do not report direct_speed and natural_speed
         if (!this.supportedAttributes.natural_speed_reporting && this.supportedAttributes.natural_speed) {
-            if (mode === 'nature') {
+//            if (mode === 'nature') {
+            if (mode === 1) {
                 natural_speed = true
-            } else if (mode === 'normal') {
+//            } else if (mode === 'normal') {
+            } else if (mode === 0) {
                 natural_speed = false
             } else {
                 this.error(`Unrecognized mode for ${model} when updating natural mode state: ${mode}`)
@@ -761,7 +782,8 @@ LED
         // Sleep mode
         activeElement = fanboxa.querySelector('.var-sleep')
         if (this.supportedAttributes.sleep_mode) {
-            if (raw_speed_int == 1) {
+         // if (raw_speed_int == 1) {
+            if (mode == 2) {
                 if (activeElement.classList.contains('active') === false) {
                     activeElement.classList.add('active')
                 }

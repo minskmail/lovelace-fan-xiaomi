@@ -734,7 +734,8 @@ LED
         let speedLevel
         let raw_speed_int = Number(raw_speed)
         if (!this.config.use_standard_speeds) {
-            let speedRegexp = /Level(\d)/g
+        //  let speedRegexp = /Level(\d)/g
+            let speedRegexp = /(\d)/g
             speedRegexpMatch = speedRegexp.exec(speed)
             if (speedRegexpMatch && speedRegexpMatch.length > 0) {
                 speedLevel = speedRegexpMatch[1]
